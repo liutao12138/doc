@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # Redis服务 - 作为Celery的消息代理和结果后端
+  redis:
+    image: redis:7-alpine
+    container_name: doc_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 主应用服务 - FastAPI
+  app:
+    build: .
+    container_name: doc_app
+    ports:
+      - "8000:8000"
+    environment:
+      # Redis配置
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      
+      
+      # 应用配置
+      - PYTHONPATH=/app
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./uploads:/app/uploads
+      - ./output:/app/output
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Celery Worker服务
+  celery-worker:
+    build: .
+    container_name: doc_celery_worker
+    environment:
+      # Redis配置
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # 应用配置
+      - PYTHONPATH=/app
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./uploads:/app/uploads
+      - ./output:/app/output
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: celery -A app.core.celery_app worker --loglevel=info --queues=excel_conversion,vectorization --concurrency=2
+    restart: unless-stopped
+
+  # Celery Flower监控服务（可选）
+  celery-flower:
+    build: .
+    container_name: doc_celery_flower
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONPATH=/app
+    depends_on:
+      - redis
+      - celery-worker
+    command: celery -A app.core.celery_app flower --port=5555
+    restart: unless-stopped
+
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: doc_network
