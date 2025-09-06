@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import List, Optional
 import uuid
 from app.core.celery_app import (
-    convert_excel_to_markdown, 
     batch_convert_excel_to_markdown,
     convert_and_vectorize_chain
 )
 from app.services.file_manager import FileManager
 from app.services.vector_processor import VectorizationProcessor
+from app.api.websocket import websocket_router, send_task_update, send_file_update
 from celery.result import AsyncResult
 import tempfile
 import shutil
@@ -35,6 +35,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# 注册WebSocket路由
+app.include_router(websocket_router)
+
 # 创建必要的目录
 UPLOAD_DIR = Path("uploads")
 OUTPUT_DIR = Path("output")
@@ -48,7 +51,6 @@ async def root():
         "message": "Excel转Markdown服务",
         "version": "1.0.0",
         "endpoints": {
-            "upload_single": "/upload-single",
             "upload_batch": "/upload-batch",
             "convert_and_vectorize": "/convert-and-vectorize",
             "task_status": "/task/{task_id}",
@@ -65,56 +67,6 @@ async def health_check():
     """健康检查端点"""
     return {"status": "healthy", "service": "excel-to-markdown"}
 
-@app.post("/upload-single")
-async def upload_single_file(
-    file: UploadFile = File(...),
-    output_dir: Optional[str] = None
-):
-    """
-    上传单个Excel文件并转换为Markdown
-    
-    Args:
-        file: 上传的Excel文件
-        output_dir: 输出目录（可选）
-    
-    Returns:
-        dict: 任务信息
-    """
-    try:
-        # 检查文件类型
-        if not file.filename.lower().endswith((".xlsx", ".xls")):
-            raise HTTPException(
-                status_code=400, 
-                detail="只支持Excel文件格式 (.xlsx, .xls)"
-            )
-        
-        # 生成唯一文件名
-        file_id = str(uuid.uuid4())
-        file_extension = Path(file.filename).suffix
-        temp_filename = f"{file_id}{file_extension}"
-        temp_path = UPLOAD_DIR / temp_filename
-        
-        # 保存上传的文件
-        with open(temp_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-        
-        logger.info(f"文件上传成功: {file.filename} -> {temp_path}")
-        
-        # 启动转换任务
-        task = convert_excel_to_markdown.delay(str(temp_path), output_dir)
-        
-        return {
-            "message": "文件上传成功，转换任务已启动",
-            "task_id": task.id,
-            "filename": file.filename,
-            "status": "processing",
-            "check_status_url": f"/task/{task.id}"
-        }
-        
-    except Exception as e:
-        logger.error(f"上传文件失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
 
 @app.post("/upload-batch")
 async def upload_batch_files(

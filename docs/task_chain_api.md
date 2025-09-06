@@ -2,7 +2,9 @@
 
 ## 概述
 
-本文档描述了新增的Excel文件到向量数据库的完整任务链处理流程。该功能实现了从Excel文件上传、转换为Markdown、向量化存储到搜索查询的完整自动化流程。
+本文档描述了Excel文件到向量数据库的完整任务链处理流程。该功能实现了从Excel文件批量上传、转换为Markdown、向量化存储到搜索查询的完整自动化流程。
+
+**注意**: 系统已优化为仅支持批量处理，提供更高的效率和更好的用户体验。
 
 ## 核心功能
 
@@ -12,7 +14,26 @@
 - **统一文件管理**: 跟踪文件处理状态和元数据
 - **错误处理**: 完整的错误捕获和状态更新
 
-### 2. 新增API端点
+### 2. 主要API端点
+
+#### `POST /upload-batch`
+批量上传Excel文件并转换为Markdown
+
+**请求参数:**
+- `files`: Excel文件列表 (multipart/form-data)
+- `output_dir`: 输出目录 (可选)
+
+**响应示例:**
+```json
+{
+  "message": "批量上传成功，3 个文件转换任务已启动",
+  "task_id": "celery-task-id",
+  "file_count": 3,
+  "filenames": ["example1.xlsx", "example2.xlsx", "example3.xlsx"],
+  "status": "processing",
+  "check_status_url": "/task/{task_id}"
+}
+```
 
 #### `POST /convert-and-vectorize`
 一键完成Excel文件转换和向量化

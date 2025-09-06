@@ -56,10 +56,10 @@ def get_document_converter():
 # 基础转换任务
 # ============================================================================
 
-@app.task(bind=True)
-def convert_excel_to_markdown(self, file_path, output_dir=None, file_id=None):
+# 内部转换函数，用于批量处理和任务链
+def _convert_excel_to_markdown(file_path, output_dir=None, file_id=None):
     """
-    将Excel文件转换为Markdown格式
+    将Excel文件转换为Markdown格式（内部函数）
     
     Args:
         file_path (str): Excel文件路径
@@ -70,9 +70,6 @@ def convert_excel_to_markdown(self, file_path, output_dir=None, file_id=None):
         dict: 转换结果信息
     """
     try:
-        # 更新任务状态
-        self.update_state(state="PROGRESS", meta={"status": "开始转换", "progress": 10})
-        
         # 如果提供了file_id，更新文件管理器状态
         if file_id:
             file_manager = FileManager()
@@ -88,20 +85,11 @@ def convert_excel_to_markdown(self, file_path, output_dir=None, file_id=None):
         
         os.makedirs(output_dir, exist_ok=True)
         
-        # 更新任务状态
-        self.update_state(state="PROGRESS", meta={"status": "开始初始化转换器", "progress": 20})
-        
         # 获取文档转换器
         converter = get_document_converter()
         
-        # 更新任务状态
-        self.update_state(state="PROGRESS", meta={"status": "正在转换文档", "progress": 40})
-        
         # 转换文档
         result = converter.convert(file_path)
-        
-        # 更新任务状态
-        self.update_state(state="PROGRESS", meta={"status": "正在生成Markdown文件", "progress": 70})
         
         # 生成输出文件名
         input_file = Path(file_path)
@@ -114,9 +102,6 @@ def convert_excel_to_markdown(self, file_path, output_dir=None, file_id=None):
         # 保存Markdown文件
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(markdown_content)
-        
-        # 更新任务状态
-        self.update_state(state="PROGRESS", meta={"status": "转换完成", "progress": 90})
         
         # 准备返回结果
         result_info = {
@@ -133,9 +118,6 @@ def convert_excel_to_markdown(self, file_path, output_dir=None, file_id=None):
             result_info["file_id"] = file_id
             file_manager.update_stage_status(file_id, "convert", "completed", result_info)
         
-        # 更新任务状态
-        self.update_state(state="SUCCESS", meta=result_info)
-        
         logger.info(f"成功转换文件: {file_path} -> {output_path}")
         return result_info
         
@@ -151,16 +133,15 @@ def convert_excel_to_markdown(self, file_path, output_dir=None, file_id=None):
             except:
                 pass
         
-        # 更新任务状态为失败
-        failure_meta = {
+        # 准备失败结果
+        failure_result = {
             "status": "error",
             "error": error_msg,
             "input_file": file_path
         }
         if file_id:
-            failure_meta["file_id"] = file_id
+            failure_result["file_id"] = file_id
             
-        self.update_state(state="FAILURE", meta=failure_meta)
         raise Exception(error_msg)
 
 @app.task(bind=True)
@@ -193,7 +174,7 @@ def batch_convert_excel_to_markdown(self, file_paths, output_dir=None):
             
             try:
                 # 转换单个文件
-                result = convert_excel_to_markdown(file_path, output_dir)
+                result = _convert_excel_to_markdown(file_path, output_dir)
                 results.append({
                     "file": file_path,
                     "status": "success",
@@ -326,20 +307,19 @@ def convert_and_vectorize_chain(self, file_path: str, file_id: str, output_dir: 
     try:
         logger.info(f"开始完整任务链: {file_id}")
         
-        # 创建任务链 
-        workflow = chain(
-            convert_excel_to_markdown.s(file_path, output_dir, file_id),
-            vectorize_markdown.s(vector_type)
-        )
-        
-        # 执行任务链
-        result = workflow.apply_async()
-        
-        # 等待结果
-        final_result = result.get()
-        
-        logger.info(f"完整任务链执行成功: {file_id}")
-        return final_result
+        # 直接执行转换和向量化
+        try:
+            # 先执行转换
+            convert_result = _convert_excel_to_markdown(file_path, output_dir, file_id)
+            
+            # 再执行向量化
+            vectorize_result = vectorize_markdown(convert_result, vector_type)
+            
+            logger.info(f"完整任务链执行成功: {file_id}")
+            return vectorize_result
+            
+        except Exception as e:
+            raise e
         
     except Exception as e:
         error_msg = f"完整任务链执行失败: {str(e)}"

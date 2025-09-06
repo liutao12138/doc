@@ -64,7 +64,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command: celery -A app.core.celery_app worker --loglevel=info --queues=excel_conversion,vectorization --concurrency=2
+    command: celery -A app.core.celery_app.app worker --loglevel=info --queues=excel_conversion,vectorization --concurrency=2
     restart: unless-stopped
 
   # Celery Flower监控服务（可选）
@@ -80,7 +80,7 @@ services:
     depends_on:
       - redis
       - celery-worker
-    command: celery -A app.core.celery_app flower --port=5555
+    command: celery -A app.core.celery_app.app flower --port=5555
     restart: unless-stopped
 
 
