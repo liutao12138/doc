@@ -4,6 +4,7 @@ import os
 import logging
 from pathlib import Path
 from typing import List, Optional
+from pydantic import BaseModel
 import uuid
 from app.core.celery_app import (
     batch_convert_excel_to_markdown,
@@ -28,6 +29,12 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# 请求模型
+class DirectoryProcessRequest(BaseModel):
+    directory_path: str
+    output_dir: Optional[str] = None
+    recursive: bool = True
+
 # 创建FastAPI应用
 app = FastAPI(
     title="Excel转Markdown服务",
@@ -44,6 +51,9 @@ OUTPUT_DIR = Path("output")
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+# 创建全局文件管理器实例（单例）
+file_manager = FileManager()
+
 @app.get("/")
 async def root():
     """根路径，返回服务信息"""
@@ -52,6 +62,8 @@ async def root():
         "version": "1.0.0",
         "endpoints": {
             "upload_batch": "/upload-batch",
+            "process_directory": "/process-directory",
+            "scan_directory": "/scan-directory",
             "convert_and_vectorize": "/convert-and-vectorize",
             "task_status": "/task/{task_id}",
             "file_status": "/file/{file_id}",
@@ -91,8 +103,11 @@ async def upload_batch_files(
                 detail="一次最多上传10个文件"
             )
         
+        # 使用全局文件管理器实例
+        
         # 检查文件类型并保存
         file_paths = []
+        file_ids = []
         temp_files = []
         
         for file in files:
@@ -102,13 +117,16 @@ async def upload_batch_files(
                     detail=f"文件 {file.filename} 不是Excel格式"
                 )
             
-            # 生成唯一文件名
-            file_id = str(uuid.uuid4())
-            file_extension = Path(file.filename).suffix
-            temp_filename = f"{file_id}{file_extension}"
-            temp_path = UPLOAD_DIR / temp_filename
+            # 创建文件记录
+            file_record = file_manager.create_file_record(
+                file.filename, 
+                file.size or 0
+            )
+            file_id = file_record["file_id"]
+            file_ids.append(file_id)
             
-            # 保存文件
+            # 保存文件到指定路径
+            temp_path = Path(file_record["paths"]["upload_path"])
             with open(temp_path, "wb") as buffer:
                 content = await file.read()
                 buffer.write(content)
@@ -118,13 +136,14 @@ async def upload_batch_files(
         
         logger.info(f"批量上传成功: {len(files)} 个文件")
         
-        # 启动批量转换任务
-        task = batch_convert_excel_to_markdown.delay(file_paths, output_dir)
+        # 启动批量转换任务，传递file_ids
+        task = batch_convert_excel_to_markdown.delay(file_paths, output_dir, file_ids)
         
         return {
             "message": f"批量上传成功，{len(files)} 个文件转换任务已启动",
             "task_id": task.id,
             "file_count": len(files),
+            "file_ids": file_ids,
             "filenames": [f.filename for f in files],
             "status": "processing",
             "check_status_url": f"/task/{task.id}"
@@ -138,6 +157,105 @@ async def upload_batch_files(
         
         logger.error(f"批量上传失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"批量上传失败: {str(e)}")
+
+@app.post("/process-directory")
+async def process_directory_files(request: DirectoryProcessRequest):
+    """
+    处理指定目录中的Excel文件并转换为Markdown
+    
+    Args:
+        request: 目录处理请求，包含目录路径、输出目录等参数
+    
+    Returns:
+        dict: 批量任务信息
+    """
+    try:
+        # 使用全局文件管理器实例
+        
+        # 扫描目录中的Excel文件并创建记录
+        file_records = file_manager.create_file_records_from_directory(request.directory_path)
+        
+        if not file_records:
+            return {
+                "message": f"在目录 {request.directory_path} 中没有找到Excel文件",
+                "file_count": 0,
+                "status": "no_files_found"
+            }
+        
+        # 检查文件数量限制
+        if len(file_records) > 50:
+            raise HTTPException(
+                status_code=400,
+                detail=f"目录中的Excel文件数量过多 ({len(file_records)} 个)，一次最多处理50个文件"
+            )
+        
+        # 提取文件路径和ID
+        file_paths = [record["paths"]["upload_path"] for record in file_records]
+        file_ids = [record["file_id"] for record in file_records]
+        filenames = [record["original_filename"] for record in file_records]
+        
+        logger.info(f"目录处理成功: {len(file_records)} 个文件")
+        
+        # 启动批量转换任务
+        task = batch_convert_excel_to_markdown.delay(
+            file_paths, 
+            request.output_dir, 
+            file_ids
+        )
+        
+        return {
+            "message": f"目录处理成功，{len(file_records)} 个文件转换任务已启动",
+            "task_id": task.id,
+            "file_count": len(file_records),
+            "file_ids": file_ids,
+            "filenames": filenames,
+            "directory_path": request.directory_path,
+            "status": "processing",
+            "check_status_url": f"/task/{task.id}"
+        }
+        
+    except FileNotFoundError as e:
+        logger.error(f"目录不存在: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        logger.error(f"路径错误: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"目录处理失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"目录处理失败: {str(e)}")
+
+@app.get("/scan-directory")
+async def scan_directory(directory_path: str):
+    """
+    扫描指定目录中的Excel文件（不进行处理）
+    
+    Args:
+        directory_path: 要扫描的目录路径
+    
+    Returns:
+        dict: 扫描结果
+    """
+    try:
+        # 使用全局文件管理器实例
+        excel_files = file_manager.scan_directory_for_excel_files(directory_path)
+        
+        return {
+            "message": f"目录扫描完成",
+            "directory_path": directory_path,
+            "file_count": len(excel_files),
+            "files": excel_files,
+            "status": "scanned"
+        }
+        
+    except FileNotFoundError as e:
+        logger.error(f"目录不存在: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        logger.error(f"路径错误: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"目录扫描失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"目录扫描失败: {str(e)}")
 
 @app.get("/task/{task_id}")
 async def get_task_status(task_id: str):
@@ -220,32 +338,6 @@ async def download_file(filename: str):
         logger.error(f"下载文件失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"下载文件失败: {str(e)}")
 
-@app.get("/files")
-async def list_files():
-    """
-    列出所有可下载的文件
-    
-    Returns:
-        dict: 文件列表
-    """
-    try:
-        files = []
-        for file_path in OUTPUT_DIR.glob("*.md"):
-            files.append({
-                "filename": file_path.name,
-                "size": file_path.stat().st_size,
-                "created": file_path.stat().st_ctime,
-                "download_url": f"/download/{file_path.name}"
-            })
-        
-        return {
-            "files": files,
-            "count": len(files)
-        }
-        
-    except Exception as e:
-        logger.error(f"列出文件失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"列出文件失败: {str(e)}")
 
 @app.delete("/cleanup")
 async def cleanup_files():
@@ -305,8 +397,7 @@ async def convert_and_vectorize(
                 detail="只支持Excel文件格式 (.xlsx, .xls)"
             )
         
-        # 创建文件管理器
-        file_manager = FileManager()
+        # 使用全局文件管理器实例
         
         # 创建文件记录
         file_record = file_manager.create_file_record(
@@ -358,7 +449,7 @@ async def get_file_status(file_id: str):
         dict: 文件状态信息
     """
     try:
-        file_manager = FileManager()
+        # 使用全局文件管理器实例
         status = file_manager.get_file_status(file_id)
         
         if "error" in status:
@@ -456,7 +547,7 @@ async def list_files(status: Optional[str] = None):
         dict: 文件列表
     """
     try:
-        file_manager = FileManager()
+        # 使用全局文件管理器实例
         files = file_manager.list_files(status)
         
         return {
@@ -481,7 +572,7 @@ async def cleanup_file(file_id: str):
         dict: 清理结果
     """
     try:
-        file_manager = FileManager()
+        # 使用全局文件管理器实例
         result = file_manager.cleanup_file(file_id)
         
         if "error" in result:

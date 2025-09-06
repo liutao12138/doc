@@ -1,8 +1,9 @@
 import axios from 'axios';
 
 // 创建axios实例
+// 使用相对路径，通过package.json中的proxy配置转发到后端
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  baseURL: process.env.REACT_APP_API_URL || '', // 使用空字符串，让代理处理
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -107,6 +108,31 @@ export interface VectorStats {
     collection_size: number;
     last_updated: string;
   };
+}
+
+export interface DirectoryScanResponse {
+  message: string;
+  directory_path: string;
+  file_count: number;
+  files: Array<{
+    file_path: string;
+    filename: string;
+    relative_path: string;
+    file_size: number;
+    modified_time: number;
+  }>;
+  status: string;
+}
+
+export interface DirectoryProcessResponse {
+  message: string;
+  task_id: string;
+  file_count: number;
+  file_ids: string[];
+  filenames: string[];
+  directory_path: string;
+  status: string;
+  check_status_url: string;
 }
 
 // API方法
@@ -224,6 +250,28 @@ export const apiService = {
     output_files_removed: number;
   }> {
     const response = await api.delete('/cleanup');
+    return response.data;
+  },
+
+  // 扫描目录中的Excel文件
+  async scanDirectory(directoryPath: string): Promise<DirectoryScanResponse> {
+    const response = await api.get('/scan-directory', {
+      params: { directory_path: directoryPath },
+    });
+    return response.data;
+  },
+
+  // 处理目录中的Excel文件
+  async processDirectory(
+    directoryPath: string,
+    outputDir?: string,
+    recursive: boolean = true
+  ): Promise<DirectoryProcessResponse> {
+    const response = await api.post('/process-directory', {
+      directory_path: directoryPath,
+      output_dir: outputDir,
+      recursive: recursive,
+    });
     return response.data;
   },
 };

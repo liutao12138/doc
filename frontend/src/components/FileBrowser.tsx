@@ -16,9 +16,7 @@ import {
   Input,
   message,
   Tooltip,
-  Progress,
-  List,
-  Avatar,
+  Divider,
 } from 'antd';
 import {
   ReloadOutlined,
@@ -30,7 +28,6 @@ import {
   ExclamationCircleOutlined,
   ClockCircleOutlined,
   SyncOutlined,
-  SearchOutlined,
 } from '@ant-design/icons';
 import { apiService, FileInfo } from '../services/api';
 import { wsService, FileUpdateEvent } from '../services/websocket';
@@ -186,8 +183,8 @@ const FileBrowser: React.FC = () => {
   const filteredFiles = files.filter(file => {
     const matchesStatus = statusFilter === 'all' || file.status === statusFilter;
     const matchesSearch = !searchText || 
-      file.file_id.toLowerCase().includes(searchText.toLowerCase()) ||
-      file.filename.toLowerCase().includes(searchText.toLowerCase());
+      (file.file_id && file.file_id.toLowerCase().includes(searchText.toLowerCase())) ||
+      (file.filename && file.filename.toLowerCase().includes(searchText.toLowerCase()));
     
     return matchesStatus && matchesSearch;
   });
@@ -207,13 +204,18 @@ const FileBrowser: React.FC = () => {
       title: '文件名',
       dataIndex: 'filename',
       key: 'filename',
-      ellipsis: true,
+      width: 300,
       render: (text: string, record: FileInfo) => (
         <Space>
           <FileTextOutlined style={{ color: '#1890ff' }} />
-          <Text ellipsis style={{ maxWidth: 200 }}>
-            {text}
-          </Text>
+          <Tooltip title={text} placement="topLeft">
+            <Text 
+              className="filename-cell"
+              onClick={() => showFileDetail(record)}
+            >
+              {text}
+            </Text>
+          </Tooltip>
         </Space>
       ),
     },
@@ -224,7 +226,7 @@ const FileBrowser: React.FC = () => {
       width: 200,
       render: (text: string) => (
         <Text code style={{ fontSize: 12 }}>
-          {text.substring(0, 16)}...
+          {text ? text.substring(0, 16) + '...' : 'N/A'}
         </Text>
       ),
     },
@@ -246,7 +248,7 @@ const FileBrowser: React.FC = () => {
       title: '转换状态',
       key: 'convert_status',
       width: 120,
-      render: (_, record: FileInfo) => {
+      render: (_: any, record: FileInfo) => {
         const stage = record.stages?.convert;
         const config = getStageStatus(stage);
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -256,7 +258,7 @@ const FileBrowser: React.FC = () => {
       title: '向量化状态',
       key: 'vectorize_status',
       width: 120,
-      render: (_, record: FileInfo) => {
+      render: (_: any, record: FileInfo) => {
         const stage = record.stages?.vectorize;
         const config = getStageStatus(stage);
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -273,7 +275,7 @@ const FileBrowser: React.FC = () => {
       title: '操作',
       key: 'actions',
       width: 150,
-      render: (_, record: FileInfo) => (
+      render: (_: any, record: FileInfo) => (
         <Space size="small">
           <Tooltip title="查看详情">
             <Button
@@ -396,6 +398,7 @@ const FileBrowser: React.FC = () => {
       {/* 文件列表 */}
       <Card>
         <Table
+          className="file-browser-table"
           columns={columns}
           dataSource={filteredFiles}
           rowKey="file_id"
@@ -407,7 +410,8 @@ const FileBrowser: React.FC = () => {
             showTotal: (total, range) => 
               `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
           }}
-          scroll={{ x: 1000 }}
+          scroll={{ x: 1200 }}
+          size="small"
         />
       </Card>
 
@@ -465,7 +469,6 @@ const FileBrowser: React.FC = () => {
                         <Alert
                           message={selectedFile.stages.convert.error}
                           type="error"
-                          size="small"
                         />
                       )}
                       {selectedFile.stages.convert.result && (
@@ -492,7 +495,6 @@ const FileBrowser: React.FC = () => {
                         <Alert
                           message={selectedFile.stages.vectorize.error}
                           type="error"
-                          size="small"
                         />
                       )}
                       {selectedFile.stages.vectorize.result && (

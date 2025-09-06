@@ -16,8 +16,9 @@ enable_utc = True
 
 # 任务路由
 task_routes = {
-    "celery_tasks.convert_excel_to_markdown": {"queue": "excel_conversion"},
-    "celery_tasks.batch_convert_excel_to_markdown": {"queue": "excel_conversion"},
+    "app.core.celery_app.batch_convert_excel_to_markdown": {"queue": "excel_conversion"},
+    "app.core.celery_app.vectorize_markdown": {"queue": "vectorization"},
+    "app.core.celery_app.convert_and_vectorize_chain": {"queue": "excel_conversion"},
 }
 
 # 工作进程配置

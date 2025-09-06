@@ -12,6 +12,10 @@ class VectorizationProcessor:
         self.vector_manager = VectorManager(vector_type)
         self.document_processor = DocumentProcessor()
     
+    def process_file(self, file_path: str, file_id: str, vector_type: str = "milvus") -> Dict[str, Any]:
+        """处理文件（通用方法，兼容Celery任务调用）"""
+        return self.process_markdown_file(file_path, file_id)
+    
     def process_markdown_file(self, markdown_path: str, file_id: str) -> Dict[str, Any]:
         try:
             logger.info(f"开始处理Markdown文件: {markdown_path}")
@@ -41,7 +45,7 @@ class VectorizationProcessor:
                 "vector_type": self.vector_manager.vector_type
             }
             
-            logger.info(f"Markdown文件处理成功: {file_id}")
+            logger.info(f"Markdown文件处理成功: {file_id}, 文档数量: {len(documents)}")
             return result
             
         except Exception as e:

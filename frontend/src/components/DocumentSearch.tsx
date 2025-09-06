@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   Input,
@@ -21,12 +21,10 @@ import {
 import {
   SearchOutlined,
   FileTextOutlined,
-  ReloadOutlined,
   InfoCircleOutlined,
   StarOutlined,
 } from '@ant-design/icons';
 import { apiService, SearchResponse, SearchResult } from '../services/api';
-import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;

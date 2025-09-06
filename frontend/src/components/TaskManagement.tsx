@@ -235,7 +235,7 @@ const TaskManagement: React.FC = () => {
       title: '操作',
       key: 'actions',
       width: 120,
-      render: (_, record: TaskRecord) => (
+      render: (_: any, record: TaskRecord) => (
         <Space size="small">
           <Tooltip title="查看详情">
             <Button

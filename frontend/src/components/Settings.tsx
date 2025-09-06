@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Form,
@@ -25,9 +25,8 @@ import {
   NotificationOutlined,
 } from '@ant-design/icons';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Paragraph } = Typography;
 const { Option } = Select;
-const { TextArea } = Input;
 
 interface SettingsData {
   api: {
@@ -109,12 +108,12 @@ const Settings: React.FC = () => {
   });
 
   // 加载设置
-  const loadSettings = () => {
+  const loadSettings = useCallback(() => {
     const savedSettings = localStorage.getItem('app_settings');
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
-        setSettings({ ...settings, ...parsed });
+        setSettings(prevSettings => ({ ...prevSettings, ...parsed }));
         form.setFieldsValue({ ...settings, ...parsed });
       } catch (error) {
         console.error('加载设置失败:', error);
@@ -122,7 +121,7 @@ const Settings: React.FC = () => {
     } else {
       form.setFieldsValue(settings);
     }
-  };
+  }, [settings, form]);
 
   // 保存设置
   const saveSettings = async (values: SettingsData) => {
@@ -187,7 +186,7 @@ const Settings: React.FC = () => {
 
   useEffect(() => {
     loadSettings();
-  }, []);
+  }, [loadSettings]);
 
   const tabItems = [
     {
@@ -199,7 +198,14 @@ const Settings: React.FC = () => {
         </span>
       ),
       children: (
-        <Card>
+        <Card
+          style={{ 
+            borderRadius: '12px',
+            background: 'rgba(255, 255, 255, 0.8)',
+            backdropFilter: 'blur(5px)',
+            border: '1px solid rgba(102, 126, 234, 0.1)'
+          }}
+        >
           <Form
             form={form}
             layout="vertical"
@@ -213,7 +219,10 @@ const Settings: React.FC = () => {
                   name={['api', 'baseUrl']}
                   rules={[{ required: true, message: '请输入API基础URL' }]}
                 >
-                  <Input placeholder="http://localhost:8000" />
+                  <Input 
+                    placeholder="http://localhost:8000" 
+                    style={{ borderRadius: '8px' }}
+                  />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12}>
@@ -493,11 +502,20 @@ const Settings: React.FC = () => {
         </Paragraph>
       </div>
 
-      <Card>
+      <Card
+        style={{ 
+          borderRadius: '16px',
+          background: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.2)'
+        }}
+      >
         <Tabs
           defaultActiveKey="api"
           items={tabItems}
           tabPosition="top"
+          className="settings-tabs"
         />
         
         <Divider />
@@ -517,6 +535,13 @@ const Settings: React.FC = () => {
               <Button
                 icon={<ReloadOutlined />}
                 onClick={resetSettings}
+                style={{
+                  borderRadius: '20px',
+                  background: 'rgba(107, 114, 128, 0.1)',
+                  border: '1px solid rgba(107, 114, 128, 0.3)',
+                  color: '#6b7280',
+                  fontWeight: 600
+                }}
               >
                 重置设置
               </Button>
@@ -525,6 +550,13 @@ const Settings: React.FC = () => {
                 icon={<SaveOutlined />}
                 loading={loading}
                 onClick={() => form.submit()}
+                style={{
+                  borderRadius: '20px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none',
+                  boxShadow: '0 8px 24px rgba(102, 126, 234, 0.3)',
+                  fontWeight: 600
+                }}
               >
                 保存设置
               </Button>

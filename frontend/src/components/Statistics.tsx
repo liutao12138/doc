@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Row,
@@ -11,7 +11,6 @@ import {
   Tag,
   Progress,
   Alert,
-  Spin,
   Select,
   DatePicker,
 } from 'antd';
@@ -54,7 +53,7 @@ const Statistics: React.FC = () => {
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
 
   // 获取系统统计信息
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
       // 获取文件统计
@@ -121,11 +120,11 @@ const Statistics: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [vectorType]);
 
   useEffect(() => {
     fetchStats();
-  }, [vectorType]);
+  }, [vectorType, fetchStats]);
 
   // 获取活动类型图标
   const getActivityIcon = (type: string) => {
@@ -160,7 +159,7 @@ const Statistics: React.FC = () => {
     {
       title: '活动',
       key: 'activity',
-      render: (_, record: any) => (
+      render: (_: any, record: any) => (
         <Space>
           {getActivityIcon(record.type)}
           <Text>{record.description}</Text>
@@ -216,7 +215,7 @@ const Statistics: React.FC = () => {
             <Text strong>时间范围：</Text>
             <RangePicker
               value={dateRange}
-              onChange={setDateRange}
+              onChange={(dates) => setDateRange(dates as [any, any] | null)}
               style={{ marginLeft: 8 }}
             />
           </Col>

@@ -24,6 +24,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "start:win": "set DANGEROUSLY_DISABLE_HOST_CHECK=true && set WDS_SOCKET_HOST=localhost && set WDS_SOCKET_PORT=3000 && react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

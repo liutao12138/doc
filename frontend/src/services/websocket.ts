@@ -11,7 +11,8 @@ class WebSocketService {
       return;
     }
 
-    const wsUrl = process.env.REACT_APP_WS_URL || 'http://localhost:8000';
+    // 使用相对路径，通过package.json中的proxy配置转发到后端
+    const wsUrl = process.env.REACT_APP_WS_URL || '';
     
     this.socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
@@ -107,7 +108,7 @@ export const wsService = new WebSocketService();
 // 导出类型
 export interface TaskUpdateEvent {
   task_id: string;
-  state: string;
+  state: 'pending' | 'progress' | 'success' | 'failure';
   status: string;
   progress?: number;
   message?: string;
@@ -117,7 +118,7 @@ export interface TaskUpdateEvent {
 
 export interface FileUpdateEvent {
   file_id: string;
-  status: string;
+  status: 'uploaded' | 'processing' | 'completed' | 'error';
   stages: {
     convert: {
       status: string;

@@ -1,13 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import {
   Card,
-  Upload,
   Button,
   message,
   Progress,
   Space,
   Typography,
-  Divider,
   Select,
   Input,
   Row,
@@ -15,7 +13,6 @@ import {
   Tag,
   List,
   Avatar,
-  Tooltip,
 } from 'antd';
 import {
   InboxOutlined,
@@ -29,7 +26,6 @@ import { apiService, UploadResponse } from '../services/api';
 import { wsService } from '../services/websocket';
 
 const { Title, Text, Paragraph } = Typography;
-const { Dragger } = Upload;
 const { Option } = Select;
 
 interface UploadTask {
@@ -49,55 +45,8 @@ const FileUpload: React.FC = () => {
   const [outputDir, setOutputDir] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
 
-  // 文件拖拽处理
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const excelFiles = acceptedFiles.filter(file => 
-      file.name.toLowerCase().endsWith('.xlsx') || 
-      file.name.toLowerCase().endsWith('.xls')
-    );
-
-    if (excelFiles.length !== acceptedFiles.length) {
-      message.warning('只支持Excel文件格式 (.xlsx, .xls)');
-    }
-
-    if (excelFiles.length > 0) {
-      handleUpload(excelFiles);
-    }
-  }, [uploadType, vectorType, outputDir]);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-      'application/vnd.ms-excel': ['.xls'],
-    },
-    multiple: true,
-    disabled: isUploading,
-  });
-
-  // 处理文件上传
-  const handleUpload = async (files: File[]) => {
-    if (files.length === 0) return;
-
-    setIsUploading(true);
-
-    try {
-      if (uploadType === 'batch') {
-        await uploadBatchFiles(files);
-      } else if (uploadType === 'vectorize' && files.length === 1) {
-        await uploadAndVectorize(files[0]);
-      }
-    } catch (error) {
-      console.error('上传失败:', error);
-      message.error('上传失败，请重试');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-
   // 批量上传文件
-  const uploadBatchFiles = async (files: File[]) => {
+  const uploadBatchFiles = useCallback(async (files: File[]) => {
     const taskId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const newTask: UploadTask = {
@@ -131,10 +80,10 @@ const FileUpload: React.FC = () => {
       ));
       throw error;
     }
-  };
+  }, [outputDir]);
 
   // 上传并向量化
-  const uploadAndVectorize = async (file: File) => {
+  const uploadAndVectorize = useCallback(async (file: File) => {
     const taskId = `vectorize_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const newTask: UploadTask = {
@@ -171,7 +120,53 @@ const FileUpload: React.FC = () => {
       ));
       throw error;
     }
-  };
+  }, [outputDir, vectorType]);
+
+  // 处理文件上传
+  const handleUpload = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+
+    setIsUploading(true);
+
+    try {
+      if (uploadType === 'batch') {
+        await uploadBatchFiles(files);
+      } else if (uploadType === 'vectorize' && files.length === 1) {
+        await uploadAndVectorize(files[0]);
+      }
+    } catch (error) {
+      console.error('上传失败:', error);
+      message.error('上传失败，请重试');
+    } finally {
+      setIsUploading(false);
+    }
+  }, [uploadType, uploadBatchFiles, uploadAndVectorize]);
+
+  // 文件拖拽处理
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const excelFiles = acceptedFiles.filter(file => 
+      file.name.toLowerCase().endsWith('.xlsx') || 
+      file.name.toLowerCase().endsWith('.xls')
+    );
+
+    if (excelFiles.length !== acceptedFiles.length) {
+      message.warning('只支持Excel文件格式 (.xlsx, .xls)');
+    }
+
+    if (excelFiles.length > 0) {
+      handleUpload(excelFiles);
+    }
+  }, [handleUpload]);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls'],
+    },
+    multiple: true,
+    disabled: isUploading,
+  });
 
   // 删除任务
   const removeTask = (taskId: string) => {
@@ -211,7 +206,22 @@ const FileUpload: React.FC = () => {
 
       <Row gutter={24}>
         <Col xs={24} lg={16}>
-          <Card title="上传配置" style={{ marginBottom: 24 }}>
+          <Card 
+            title="上传配置" 
+            style={{ 
+              marginBottom: 24,
+              borderRadius: '16px',
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}
+            headStyle={{
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+              borderRadius: '16px 16px 0 0',
+              borderBottom: '1px solid rgba(102, 126, 234, 0.1)'
+            }}
+          >
             <Space direction="vertical" style={{ width: '100%' }} size="large">
               <div>
                 <Text strong>上传类型：</Text>
@@ -251,21 +261,66 @@ const FileUpload: React.FC = () => {
             </Space>
           </Card>
 
-          <Card title="文件上传">
+          <Card 
+            title="文件上传"
+            style={{ 
+              borderRadius: '16px',
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}
+            headStyle={{
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+              borderRadius: '16px 16px 0 0',
+              borderBottom: '1px solid rgba(102, 126, 234, 0.1)'
+            }}
+          >
             <div
               {...getRootProps()}
               className={`upload-area ${isDragActive ? 'dragover' : ''}`}
               style={{ opacity: isUploading ? 0.6 : 1 }}
             >
               <input {...getInputProps()} />
-              <InboxOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
-              <Title level={4}>
+              <InboxOutlined style={{ 
+                fontSize: 64, 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                marginBottom: 24 
+              }} />
+              <Title level={3} style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                fontWeight: 600
+              }}>
                 {isDragActive ? '释放文件到此处' : '拖拽Excel文件到此处或点击上传'}
               </Title>
-              <Paragraph type="secondary">
+              <Paragraph style={{ 
+                color: '#6b7280', 
+                fontSize: '16px',
+                marginBottom: 24
+              }}>
                 支持 .xlsx 和 .xls 格式的Excel文件（可多选）
               </Paragraph>
-              <Button type="primary" icon={<UploadOutlined />} disabled={isUploading}>
+              <Button 
+                type="primary" 
+                icon={<UploadOutlined />} 
+                disabled={isUploading}
+                size="large"
+                style={{
+                  borderRadius: '24px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none',
+                  boxShadow: '0 8px 24px rgba(102, 126, 234, 0.3)',
+                  fontWeight: 600,
+                  height: '48px',
+                  padding: '0 32px'
+                }}
+              >
                 选择文件
               </Button>
             </div>
@@ -273,7 +328,22 @@ const FileUpload: React.FC = () => {
         </Col>
 
         <Col xs={24} lg={8}>
-          <Card title="上传说明" style={{ marginBottom: 24 }}>
+          <Card 
+            title="上传说明" 
+            style={{ 
+              marginBottom: 24,
+              borderRadius: '16px',
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}
+            headStyle={{
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+              borderRadius: '16px 16px 0 0',
+              borderBottom: '1px solid rgba(102, 126, 234, 0.1)'
+            }}
+          >
             <List
               size="small"
               dataSource={[
@@ -284,15 +354,39 @@ const FileUpload: React.FC = () => {
                 '向量化需要额外时间',
               ]}
               renderItem={(item) => (
-                <List.Item>
-                  <Avatar size="small" icon={<InfoCircleOutlined />} />
-                  {item}
+                <List.Item style={{ 
+                  padding: '12px 0',
+                  borderBottom: '1px solid rgba(102, 126, 234, 0.1)'
+                }}>
+                  <Avatar 
+                    size="small" 
+                    icon={<InfoCircleOutlined />} 
+                    style={{
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      border: 'none'
+                    }}
+                  />
+                  <span style={{ marginLeft: 12, color: '#4b5563' }}>{item}</span>
                 </List.Item>
               )}
             />
           </Card>
 
-          <Card title="上传任务">
+          <Card 
+            title="上传任务"
+            style={{ 
+              borderRadius: '16px',
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}
+            headStyle={{
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+              borderRadius: '16px 16px 0 0',
+              borderBottom: '1px solid rgba(102, 126, 234, 0.1)'
+            }}
+          >
             {uploadTasks.length === 0 ? (
               <div style={{ textAlign: 'center', color: '#8c8c8c', padding: '40px 0' }}>
                 暂无上传任务
